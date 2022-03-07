@@ -1,6 +1,11 @@
 using ChatNetCore6.Data;
+using ChatNetCore6.Hubs;
+using ChatNetCore6.Models;
+using ChatNetCore6.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,10 +15,13 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
+builder.Services.AddDefaultIdentity<AppUser>(options => options.SignIn.RequireConfirmedAccount = true)
     .AddEntityFrameworkStores<ApplicationDbContext>();
 builder.Services.AddControllersWithViews();
-
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRmqConsumerService, RmqConsumerService>();
+builder.Services.AddSingleton<IRmqProducerService, RmqProducerService>();
+builder.Services.AddScoped<IManageMessage, ManageMessage>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -40,5 +48,10 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 app.MapRazorPages();
-
+app.MapHub<ChatHub>("/Home/Index");
+app.Lifetime.ApplicationStarted.Register(() => {
+    var rabbitMQService = (IRmqConsumerService)((IApplicationBuilder)app).ApplicationServices.GetService(typeof(IRmqConsumerService));
+    rabbitMQService.Connect();
+});
 app.Run();
+
